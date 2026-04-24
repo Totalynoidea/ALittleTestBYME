@@ -1,6 +1,6 @@
 # 🎡 LuckyWheel — 幸运转盘
 
-一个功能丰富的自定义转盘抽选工具，支持浏览器、Windows (EXE) 和 Android (APK) 使用。
+完全由AI生成。这是一个功能丰富的自定义转盘抽选工具，支持浏览器、Windows (EXE) 和 Android (APK) 使用。
 
 ## 🚀 快速开始
 
@@ -9,32 +9,32 @@
 
 或启动本地服务器：
 ```bash
-npm install
-npm start
+npm 安装
+npm 启动
 ```
 
 ### 打包为 EXE (Windows)
 ```bash
-npm install
-npm run electron:build
+npm 安装
+npm 运行 electron:build
 ```
-输出文件在 `dist-electron/` 目录下。
+输出文件在 ``dist-electron/`` 目录下。
 
-### 打包为 APK (Android)
+### 打包为 APK (安卓)
 ```bash
-npm install
-npm run cap:sync
-npm run cap:open:android
+npm 安装
+npm 运行 cap:sync
+npm 运行 cap:open:android
 ```
 在 Android Studio 中构建 APK。
 
 > 注意：打包 APK 需要安装 [Android Studio](https://developer.android.com/studio)。
 
-## ✨ 功能特性
+##✨ 功能特性
 
 - 🎨 **自定义转盘** — 自由编辑选项文本、权重和颜色
 - 🎯 **权重分区** — 角度按权重分配，最小权重也有足够空间显示文字
-- 🔄 **双旋转模式** — 转盘旋转或指针旋转
+- 🔄 **双旋转模式** 🔄 — 转盘旋转或指针旋转
 - 🎬 **物理效果** — 指数衰减缓动，停止自然
 - 🌙 **深色模式** — 深浅主题切换，自动适配文字颜色
 - 📋 **点击禁用** — 点击转盘分区可快速启用/禁用选项
