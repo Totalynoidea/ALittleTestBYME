@@ -1,0 +1,54 @@
+{
+  "name": "lucky-wheel",
+  "version": "1.0.0",
+  "description": "LuckyWheel 幸运转盘 — 可定制的随机抽选工具",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server . -p 8080 -o",
+    "electron": "npx electron electron/main.js",
+    "electron:build": "npx electron-builder --win",
+    "cap:init": "npx cap init LuckyWheel com.luckywheel.app --web-dir .",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android"
+  },
+  "keywords": ["wheel", "spinner", "random", "lottery"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.0",
+    "@capacitor/core": "^5.7.0",
+    "@capacitor/cli": "^5.7.0",
+    "@capacitor/android": "^5.7.0",
+    "http-server": "^14.1.1"
+  },
+  "build": {
+    "appId": "com.luckywheel.app",
+    "productName": "LuckyWheel 幸运转盘",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "index.html",
+      "css/**/*",
+      "js/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "LuckyWheel 幸运转盘"
+    }
+  }
+}

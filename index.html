@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#f0f2f5">
+    <title>LuckyWheel — 幸运转盘</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="toast-container"></div>
+<div class="panel-backdrop" id="panel-backdrop"></div>
+
+<!-- 使用说明切换 -->
+<button id="help-toggle" title="使用说明">❓</button>
+
+<!-- 使用说明面板 -->
+<div class="help-panel visible" id="help-panel">
+    <h3>📜 使用说明</h3>
+    <div class="help-section">基本操作</div>
+    <ul>
+        <li>点击下方按钮或中心圆开始旋转</li>
+        <li>点击转盘分区可启用/禁用选项</li>
+        <li>拖拽转盘可手动旋转</li>
+        <li>松手后若速度足够会自动旋转</li>
+    </ul>
+    <div class="help-section">快捷操作</div>
+    <ul>
+        <li>旋转中点击中心圆 → 快捷停止</li>
+        <li>长按中心圆 → 跳到结果</li>
+        <li>鼠标悬停分区 → 高亮效果</li>
+    </ul>
+    <div class="help-section">管理</div>
+    <ul>
+        <li>✏️ 编辑当前转盘内容</li>
+        <li>📁 管理预设和转盘组</li>
+        <li>⚙️ 打开设置面板</li>
+        <li>🔄 重置已抽取记录</li>
+    </ul>
+</div>
+
+<div class="app-container">
+    <div class="top-bar">
+        <div class="top-bar-left">
+            <button class="btn btn-icon" id="edit-btn" title="编辑当前转盘">✏️</button>
+            <button class="btn btn-icon" id="reset-drawn-btn" title="重置已抽取记录">🔄</button>
+        </div>
+        <div class="wheel-name" id="wheel-name">幸运转盘</div>
+        <div class="top-bar-right">
+            <button class="btn btn-icon" id="preset-btn" title="预设管理">📁</button>
+            <button class="btn btn-icon" id="settings-btn" title="设置">⚙️</button>
+        </div>
+    </div>
+
+    <div class="pointer-target-area">
+        <span id="pointer-target"></span>
+    </div>
+
+    <div class="wheel-area">
+        <div class="wheel-canvas-wrapper">
+            <canvas id="wheel-canvas"></canvas>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="spin-btn">🎰 开始旋转</button>
+    </div>
+
+    <div class="wheel-tabs" id="wheel-tabs"></div>
+    <div class="bottom-bar"></div>
+</div>
+
+<!-- 设置面板 -->
+<div id="settings-panel">
+    <div class="settings-header">
+        <h2>⚙️ 设置</h2>
+        <button class="btn btn-icon" id="settings-close" title="关闭">✕</button>
+    </div>
+    <div class="settings-body">
+        <div class="setting-group">
+            <label>外观主题</label>
+            <button id="set-theme-toggle">🌙 深色模式</button>
+        </div>
+        <div class="setting-group">
+            <label>默认旋转时间（秒）</label>
+            <input type="number" id="set-duration" min="1" max="30" step="0.5" value="4">
+        </div>
+        <div class="setting-group">
+            <label>减速曲线</label>
+            <select id="set-speed-curve">
+                <option value="slow">缓慢（长旋转）</option>
+                <option value="normal" selected>标准</option>
+                <option value="fast">快速（短旋转）</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>旋转模式</label>
+            <select id="set-spin-mode">
+                <option value="wheel">转盘旋转</option>
+                <option value="pointer">指针旋转</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>转盘配色</label>
+            <select id="set-color-scheme"></select>
+        </div>
+        <div class="setting-group">
+            <label>转盘文字颜色</label>
+            <input type="color" id="set-text-color" value="#ffffff">
+        </div>
+        <div class="setting-group setting-row">
+            <label>切换主题时重置文字颜色</label>
+            <label class="toggle-switch"><input type="checkbox" id="set-reset-text-color" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="setting-group setting-row">
+            <label>允许重复抽取</label>
+            <label class="toggle-switch"><input type="checkbox" id="set-allow-repeat" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="setting-group setting-row">
+            <label>旋转中点击停止</label>
+            <label class="toggle-switch"><input type="checkbox" id="set-click-stop" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="setting-group">
+            <label>文字描边</label>
+            <div class="setting-inline">
+                <label class="toggle-switch"><input type="checkbox" id="set-stroke-enabled" checked><span class="toggle-slider"></span></label>
+                <input type="color" id="set-stroke-color" value="#000000" title="描边颜色">
+                <input type="range" id="set-stroke-width" min="0.5" max="5" step="0.5" value="2" style="width:70px;accent-color:var(--accent)">
+                <span class="range-val" id="stroke-width-val">2</span>
+            </div>
+        </div>
+        <div class="setting-group setting-row">
+            <label>显示使用说明</label>
+            <label class="toggle-switch"><input type="checkbox" id="set-show-help" checked><span class="toggle-slider"></span></label>
+        </div>
+    </div>
+    <div class="settings-footer">
+        <button class="btn btn-secondary" id="settings-reset">恢复默认</button>
+        <button class="btn btn-primary" id="settings-save">保存</button>
+    </div>
+</div>
+
+<!-- 模态框 -->
+<div id="modal-overlay">
+    <div class="modal-dialog">
+        <div id="modal-title">标题</div>
+        <div id="modal-body">内容</div>
+        <div id="modal-footer">底部</div>
+    </div>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/spin-engine.js"></script>
+<script src="js/wheel-renderer.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
