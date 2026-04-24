@@ -117,7 +117,7 @@ const UI = (() => {
     /* ══════════════════════════════════════════
        转盘编辑器
     ══════════════════════════════════════════ */
-    function openWheelEditor(wheel, onSave) {
+    function openWheelEditor(wheel, onSave, onDelete) {
         const modal = document.getElementById('modal-overlay');
         document.getElementById('modal-title').textContent = '编辑转盘 — ' + (wheel.name || '新转盘');
         const body = document.getElementById('modal-body');
@@ -182,19 +182,26 @@ const UI = (() => {
             renderOpts(); list.scrollTop = list.scrollHeight;
         });
 
-        footer.innerHTML = `<button class="btn btn-secondary" id="modal-cancel">取消</button><button class="btn btn-primary" id="modal-confirm">保存</button>`;
+        footer.innerHTML = `<button class="btn btn-danger btn-sm" id="modal-delete" style="margin-right:auto">🗑️ 删除转盘</button><button class="btn btn-secondary" id="modal-cancel">取消</button><button class="btn btn-primary" id="modal-confirm">保存</button>`;
         footer.querySelector('#modal-cancel').onclick = closeEditor;
         footer.querySelector('#modal-confirm').onclick = () => {
             wheel.name = body.querySelector('#editor-name').value.trim() || wheel.name;
             onSave(wheel); closeEditor(); toast('转盘已更新', 'success');
         };
+        if (onDelete) {
+            footer.querySelector('#modal-delete').onclick = () => {
+                if (confirm('确定删除该转盘？此操作不可撤销。')) { onDelete(); closeEditor(); toast('转盘已删除', 'success'); }
+            };
+        } else {
+            footer.querySelector('#modal-delete').style.display = 'none';
+        }
         modal.classList.add('open'); activeModal = 'editor';
     }
 
     function closeEditor() { document.getElementById('modal-overlay').classList.remove('open'); activeModal = null; }
 
     /* ══════════════════════════════════════════
-       嵌套预设管理（v2：转盘组一级，转盘二级）
+       嵌套预设管理（v3：转盘组一级，转盘二级，支持新建组/删除转盘/编辑转盘）
     ══════════════════════════════════════════ */
     function openPresetManager(groups, currentGroupId, currentWheelId, onSelect) {
         const modal = document.getElementById('modal-overlay');
@@ -222,13 +229,17 @@ const UI = (() => {
                         <span class="preset-group-count">${group.wheels.length} 个转盘</span>
                         <div class="preset-group-actions">
                             <button class="btn btn-icon btn-sm" data-act="rename-g" data-id="${group.id}" title="重命名">✏️</button>
-                            <button class="btn btn-icon btn-sm btn-danger-icon" data-act="del-g" data-id="${group.id}" title="删除">🗑️</button>
+                            <button class="btn btn-icon btn-sm btn-danger-icon" data-act="del-g" data-id="${group.id}" title="删除组">🗑️</button>
                         </div>
                     </div>
                     <div class="preset-wheels" style="display:${isExpanded ? 'block' : 'none'}">
                         ${isExpanded ? group.wheels.map(w => `
                             <div class="preset-wheel-item ${w.id === currentWheelId && isCurrent ? 'active' : ''}" data-gid="${group.id}" data-wid="${w.id}">
-                                🎡 ${esc(w.name)} <span class="preset-wheel-count">(${w.options.filter(o => o.enabled).length}项)</span>
+                                <span class="preset-wheel-label">🎡 ${esc(w.name)} <span class="preset-wheel-count">(${w.options.filter(o => o.enabled).length}项)</span></span>
+                                <span class="preset-wheel-actions">
+                                    <button class="btn btn-icon btn-sm" data-act="edit-w" data-gid="${group.id}" data-wid="${w.id}" title="编辑">✏️</button>
+                                    <button class="btn btn-icon btn-sm btn-danger-icon" data-act="del-w" data-gid="${group.id}" data-wid="${w.id}" title="删除转盘">✕</button>
+                                </span>
                             </div>
                         `).join('') + `<button class="btn btn-secondary btn-sm preset-add-wheel" data-gid="${group.id}">+ 新建转盘</button>` : ''}
                     </div>
@@ -236,7 +247,7 @@ const UI = (() => {
                 body.appendChild(gEl);
             });
 
-            // 绑定
+            // 绑定展开/折叠
             body.querySelectorAll('.preset-group-header').forEach(hdr => {
                 hdr.addEventListener('click', e => {
                     if (e.target.closest('[data-act]')) return;
@@ -245,31 +256,103 @@ const UI = (() => {
                     render();
                 });
             });
+            // 选择转盘
             body.querySelectorAll('.preset-wheel-item').forEach(item => {
-                item.addEventListener('click', () => { onSelect(item.dataset.gid, item.dataset.wid); closePresetManager(); });
+                item.addEventListener('click', e => {
+                    if (e.target.closest('[data-act]')) return;
+                    onSelect(item.dataset.gid, item.dataset.wid); closePresetManager();
+                });
             });
+            // 重命名组
             body.querySelectorAll('[data-act="rename-g"]').forEach(btn => {
-                btn.addEventListener('click', e => { e.stopPropagation(); const n = prompt('输入新组名：'); if (n?.trim()) { AppStorage.updateGroup(btn.dataset.id, { name: n.trim() }); onSelect(btn.dataset.id, currentWheelId); closePresetManager(); } });
+                btn.addEventListener('click', e => { e.stopPropagation(); const n = prompt('输入新组名：'); if (n?.trim()) { AppStorage.updateGroup(btn.dataset.id, { name: n.trim() }); groups = AppStorage.loadGroups(); onSelect(btn.dataset.id, currentWheelId); closePresetManager(); } });
             });
+            // 删除组
             body.querySelectorAll('[data-act="del-g"]').forEach(btn => {
                 btn.addEventListener('click', e => {
                     e.stopPropagation();
                     if (groups.length <= 1) { toast('至少保留一个转盘组', 'warn'); return; }
-                    if (confirm('确定删除该转盘组？')) { const u = AppStorage.deleteGroup(btn.dataset.id); closePresetManager(); onSelect(u[0].id, u[0].wheels[0]?.id); }
+                    if (confirm('确定删除该转盘组及其所有转盘？')) {
+                        const delId = btn.dataset.id;
+                        const u = AppStorage.deleteGroup(delId);
+                        groups = AppStorage.loadGroups();
+                        // 如果删除的是当前组，跳转到第一个组
+                        let newGid = currentGroupId, newWid = currentWheelId;
+                        if (delId === currentGroupId) {
+                            newGid = u[0].id;
+                            newWid = u[0].wheels[0]?.id;
+                        }
+                        closePresetManager(); onSelect(newGid, newWid);
+                    }
                 });
             });
+            // 编辑转盘
+            body.querySelectorAll('[data-act="edit-w"]').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    const gid = btn.dataset.gid, wid = btn.dataset.wid;
+                    const gs = AppStorage.loadGroups();
+                    const wheel = gs.find(g => g.id === gid)?.wheels.find(w => w.id === wid);
+                    if (!wheel) return;
+                    openWheelEditor(AppStorage.deepClone(wheel), w => {
+                        AppStorage.updateWheel(gid, wid, w);
+                        groups = AppStorage.loadGroups();
+                        // 如果编辑的是当前转盘，刷新
+                        if (gid === currentGroupId && wid === currentWheelId) {
+                            onSelect(gid, wid);
+                        }
+                        closePresetManager();
+                        toast('转盘已更新', 'success');
+                    });
+                });
+            });
+            // 删除转盘
+            body.querySelectorAll('[data-act="del-w"]').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    const gid = btn.dataset.gid, wid = btn.dataset.wid;
+                    const gs = AppStorage.loadGroups();
+                    const group = gs.find(g => g.id === gid);
+                    if (!group) return;
+                    if (group.wheels.length <= 1) { toast('该组至少保留一个转盘', 'warn'); return; }
+                    if (!confirm('确定删除该转盘？')) return;
+                    AppStorage.deleteWheel(gid, wid);
+                    groups = AppStorage.loadGroups();
+                    // 如果删除的是当前转盘，跳转到同组其他转盘
+                    let newGid = currentGroupId, newWid = currentWheelId;
+                    if (gid === currentGroupId && wid === currentWheelId) {
+                        const updatedGroup = groups.find(g => g.id === gid);
+                        newWid = updatedGroup?.wheels[0]?.id;
+                    }
+                    closePresetManager(); onSelect(newGid, newWid);
+                    toast('转盘已删除', 'success');
+                });
+            });
+            // 新建转盘
             body.querySelectorAll('.preset-add-wheel').forEach(btn => {
-                btn.addEventListener('click', () => { const w = AppStorage.addWheel(btn.dataset.gid); if (w) { closePresetManager(); onSelect(btn.dataset.gid, w.id); toast('已添加', 'success'); } });
+                btn.addEventListener('click', () => { const w = AppStorage.addWheel(btn.dataset.gid); if (w) { groups = AppStorage.loadGroups(); closePresetManager(); onSelect(btn.dataset.gid, w.id); toast('已添加', 'success'); } });
             });
         }
         render();
 
-        // 新建组
-        const addBtn = document.createElement('button');
-        addBtn.className = 'btn btn-primary btn-sm'; addBtn.style.cssText = 'width:100%;margin-top:10px';
-        addBtn.textContent = '+ 新建转盘组';
-        addBtn.addEventListener('click', () => { const n = prompt('输入组名：'); if (n?.trim()) { const g = AppStorage.addGroup(n.trim()); const w = AppStorage.addWheel(g.id); closePresetManager(); onSelect(g.id, w.id); } });
-        body.appendChild(addBtn);
+        // 新建转盘组（修复：确保添加后关闭并刷新）
+        const addGroupBtn = document.createElement('button');
+        addGroupBtn.className = 'btn btn-primary btn-sm'; addGroupBtn.style.cssText = 'width:100%;margin-top:10px';
+        addGroupBtn.textContent = '+ 新建转盘组';
+        addGroupBtn.addEventListener('click', () => {
+            const n = prompt('输入新转盘组名称：');
+            if (n?.trim()) {
+                const g = AppStorage.addGroup(n.trim());
+                if (!g) { toast('创建失败', 'error'); return; }
+                const w = AppStorage.addWheel(g.id);
+                if (!w) { toast('创建默认转盘失败', 'error'); return; }
+                groups = AppStorage.loadGroups();
+                closePresetManager();
+                onSelect(g.id, w.id);
+                toast('转盘组已创建', 'success');
+            }
+        });
+        body.appendChild(addGroupBtn);
 
         footer.innerHTML = `<button class="btn btn-secondary" id="modal-cancel">关闭</button><button class="btn btn-secondary" id="preset-export">导出</button><button class="btn btn-secondary" id="preset-import">导入</button>`;
         footer.querySelector('#modal-cancel').onclick = closePresetManager;

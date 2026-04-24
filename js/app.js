@@ -11,6 +11,7 @@
 
     const canvas = document.getElementById('wheel-canvas');
     const wheelNameEl = document.getElementById('wheel-name');
+    const appTitleEl = document.getElementById('app-title');
     const pointerTarget = document.getElementById('pointer-target');
     const spinBtn = document.getElementById('spin-btn');
     const settingsBtn = document.getElementById('settings-btn');
@@ -47,7 +48,8 @@
 
     /* ── 渲染 ── */
     function render() {
-        if (!currentWheel) { WheelRenderer.draw(null, 0); pointerTarget.textContent = ''; updateBtn(); wheelTabs.innerHTML = ''; return; }
+        if (!currentWheel) { WheelRenderer.draw(null, 0); pointerTarget.textContent = ''; wheelNameEl.textContent = ''; updateBtn(); wheelTabs.innerHTML = ''; return; }
+        wheelNameEl.textContent = currentWheel.name || '';
         const s = AppStorage.loadSettings(), rot = SpinEngine.getAngle();
         const sm = currentWheel.spinMode || s.spinMode || 'wheel';
         SpinEngine.setConfig({ buttonSpinDuration: s.defaultSpinDuration, decelerationPreset: s.decelerationPreset, clickToStop: s.clickToStop });
@@ -132,7 +134,25 @@
         canvas.addEventListener('mouseleave', () => { WheelRenderer.setCenterHover(false); canvas.style.cursor = 'default'; });
 
         settingsBtn.onclick = () => UI.openSettings(s => { if (currentWheel) { AppStorage.updateWheel(currentGroupId, currentWheelId, { spinMode: s.spinMode, allowRepeat: s.allowRepeat, clickToStop: s.clickToStop, colorSchemeId: s.colorScheme }); loadWheel(); } render(); });
-        editBtn.onclick = () => { if (!currentWheel) return; if (SpinEngine.isSpinning()) { UI.toast('请等待停止', 'warn'); return; } UI.openWheelEditor(AppStorage.deepClone(currentWheel), w => { AppStorage.updateWheel(currentGroupId, currentWheelId, w); loadWheel(); resultIndex = -1; SpinEngine.reset(); render(); }); };
+        editBtn.onclick = () => {
+            if (!currentWheel) return;
+            if (SpinEngine.isSpinning()) { UI.toast('请等待停止', 'warn'); return; }
+            UI.openWheelEditor(AppStorage.deepClone(currentWheel), w => {
+                AppStorage.updateWheel(currentGroupId, currentWheelId, w); loadWheel(); resultIndex = -1; SpinEngine.reset(); render();
+            }, () => {
+                // 删除当前转盘后跳转到同组其他转盘
+                const gs = AppStorage.loadGroups();
+                const group = gs.find(g => g.id === currentGroupId);
+                if (!group || group.wheels.length <= 1) { UI.toast('该组至少保留一个转盘', 'warn'); return; }
+                AppStorage.deleteWheel(currentGroupId, currentWheelId);
+                const updated = AppStorage.loadGroups();
+                const updatedGroup = updated.find(g => g.id === currentGroupId);
+                currentWheelId = updatedGroup?.wheels[0]?.id || currentWheelId;
+                if (currentWheelId) AppStorage.saveCurrentWheel(currentWheelId);
+                loadWheel(); resultIndex = -1; SpinEngine.reset(); render();
+                UI.toast('转盘已删除', 'success');
+            });
+        };
         presetBtn.onclick = () => { if (SpinEngine.isSpinning()) { UI.toast('请等待停止', 'warn'); return; } UI.openPresetManager(AppStorage.loadGroups(), currentGroupId, currentWheelId, (gid, wid) => { currentGroupId = gid; currentWheelId = wid; AppStorage.saveCurrentGroup(gid); AppStorage.saveCurrentWheel(wid); loadWheel(); resultIndex = -1; SpinEngine.reset(); render(); }); };
         resetDrawnBtn.onclick = () => { if (!currentWheel?.drawnOptions?.length) { UI.toast('无需重置', 'info'); return; } currentWheel.drawnOptions = []; AppStorage.updateWheel(currentGroupId, currentWheelId, { drawnOptions: [] }); loadWheel(); resultIndex = -1; SpinEngine.reset(); render(); UI.toast('已重置', 'success'); };
         document.getElementById('settings-close').onclick = UI.closeSettings;
