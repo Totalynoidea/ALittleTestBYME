@@ -98,13 +98,15 @@
     /* ── 渲染循环 ── */
     function startLoop() { if (!renderLoopActive) { renderLoopActive = true; requestAnimationFrame(tick); } }
     function tick() {
-        render();
+        try { render(); } catch (e) { console.error('render error:', e); }
         if (SpinEngine.isSpinning() || SpinEngine.isDragging()) {
             // 拖拽时：tick 音效
             if (SpinEngine.isDragging()) {
-                const angle = SpinEngine.getAngle();
-                const segs = WheelRenderer.getSegments();
-                SFX.checkTick(angle, segs, 0.4);
+                try {
+                    const angle = SpinEngine.getAngle();
+                    const segs = WheelRenderer.getSegments();
+                    SFX.checkTick(angle, segs, 0.4);
+                } catch (e) {}
             }
             requestAnimationFrame(tick);
         } else renderLoopActive = false;

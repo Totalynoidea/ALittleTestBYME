@@ -152,6 +152,23 @@ const WheelRenderer = (() => {
         drawText(seg.text, midA, isResult, isDrawn, isDisabled, theme);
     }
 
+    /* ── 文本截断（二分查找，O(log n) 次测量） ── */
+    function truncateToWidth(text, maxWidth, addEllipsis) {
+        if (!text || text.length === 0) return text;
+        if (ctx.measureText(text).width <= maxWidth) return text;
+        const suffix = addEllipsis ? '…' : '';
+        const targetW = maxWidth - ctx.measureText(suffix).width;
+        if (targetW <= 0) return suffix;
+        let lo = 1, hi = text.length;
+        while (lo < hi) {
+            const mid = Math.ceil((lo + hi) / 2);
+            if (ctx.measureText(text.slice(0, mid)).width <= targetW) lo = mid;
+            else hi = mid - 1;
+        }
+        const truncated = text.slice(0, lo);
+        return (truncated === text) ? text : truncated + suffix;
+    }
+
     function drawText(text, midCanvasAngle, isResult, isDrawn, isDisabled, theme) {
         // 防御性检查：确保 text 是有效字符串
         if (typeof text !== 'string') text = String(text || '');
@@ -193,37 +210,25 @@ const WheelRenderer = (() => {
 
             let lines = [];
             if (rawLines.length === 1 && !canWrap) {
-                let line = rawLines[0];
-                while (ctx.measureText(line + '…').width > maxSingleLineWidth && line.length > 1) line = line.slice(0, -1);
-                if (line !== rawLines[0]) line += '…';
-                lines = [line];
+                lines = [truncateToWidth(rawLines[0], maxSingleLineWidth, true)];
             } else if (rawLines.length === 1 && canWrap) {
                 const wrapWidth = Math.max(10, Math.min(maxSingleLineWidth, arcWidth * 0.8));
-                let line1 = '';
-                for (let i = 0; i < rawLines[0].length; i++) {
-                    const test = line1 + rawLines[0][i];
-                    if (ctx.measureText(test).width > wrapWidth && line1.length > 0) {
-                        lines.push(line1);
-                        line1 = rawLines[0][i];
-                        if (lines.length >= 1) {
-                            const rest = rawLines[0].slice(i);
-                            while (ctx.measureText(rest + '…').width > wrapWidth && rest.length > 1) rest = rest.slice(0, -1);
-                            if (rest !== rawLines[0].slice(i)) rest += '…';
-                            lines.push(rest);
-                            break;
-                        }
-                    } else {
-                        line1 = test;
-                    }
+                // 二分查找第一行能放多少字符
+                let lo = 0, hi = rawLines[0].length;
+                while (lo < hi) {
+                    const mid = Math.ceil((lo + hi) / 2);
+                    if (ctx.measureText(rawLines[0].slice(0, mid)).width <= wrapWidth) lo = mid;
+                    else hi = mid - 1;
                 }
-                if (lines.length < 2) lines.push(line1);
+                lines.push(rawLines[0].slice(0, lo));
+                if (lo < rawLines[0].length) {
+                    lines.push(truncateToWidth(rawLines[0].slice(lo), wrapWidth, true));
+                }
             } else {
                 for (let i = 0; i < Math.min(rawLines.length, 2); i++) {
                     let line = String(rawLines[i] || '');
                     const lineMaxW = Math.max(10, (rawLines.length <= 2 || !canWrap) ? maxSingleLineWidth : Math.min(maxSingleLineWidth, arcWidth * 0.8));
-                    while (ctx.measureText(line + '…').width > lineMaxW && line.length > 1) line = line.slice(0, -1);
-                    if (line !== String(rawLines[i] || '')) line += '…';
-                    lines.push(line);
+                    lines.push(truncateToWidth(line, lineMaxW, line.length > 0));
                 }
             }
 
