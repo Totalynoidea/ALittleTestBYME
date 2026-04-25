@@ -34,6 +34,32 @@ const UI = (() => {
         panel.querySelector('#set-stroke-width').value = settings.textStrokeWidth || 2;
         panel.querySelector('#stroke-width-val').textContent = settings.textStrokeWidth || 2;
         panel.querySelector('#set-show-help').checked = settings.showHelp !== false;
+        panel.querySelector('#set-sfx-muted').checked = settings.sfxMuted || false;
+        panel.querySelector('#set-sfx-volume').value = settings.sfxVolume !== undefined ? settings.sfxVolume : 0.5;
+        panel.querySelector('#sfx-volume-val').textContent = Math.round((settings.sfxVolume !== undefined ? settings.sfxVolume : 0.5) * 100) + '%';
+
+        // tick 音色下拉
+        const timbreSel = panel.querySelector('#set-sfx-tick-timbre');
+        timbreSel.innerHTML = '';
+        const presets = SFX.getTickPresets();
+        Object.entries(presets).forEach(([id, p]) => {
+            const o = document.createElement('option');
+            o.value = id;
+            o.textContent = p.name;
+            if (id === (settings.sfxTickTimbre || 'crisp')) o.selected = true;
+            timbreSel.appendChild(o);
+        });
+
+        // 试听按钮
+        panel.querySelector('#sfx-preview-tick').onclick = () => {
+            SFX.setTickTimbre(timbreSel.value);
+            SFX.previewTick();
+        };
+
+        // 音量实时显示
+        panel.querySelector('#set-sfx-volume').oninput = e => {
+            panel.querySelector('#sfx-volume-val').textContent = Math.round(e.target.value * 100) + '%';
+        };
 
         // 描边宽度实时显示
         panel.querySelector('#set-stroke-width').oninput = e => {
@@ -84,6 +110,12 @@ const UI = (() => {
             settings.textStrokeWidth = parseFloat(panel.querySelector('#set-stroke-width').value) || 2;
             settings.colorScheme = schemeSel.value;
             settings.showHelp = panel.querySelector('#set-show-help').checked;
+            settings.sfxMuted = panel.querySelector('#set-sfx-muted').checked;
+            settings.sfxVolume = parseFloat(panel.querySelector('#set-sfx-volume').value) || 0;
+            settings.sfxTickTimbre = panel.querySelector('#set-sfx-tick-timbre').value;
+            SFX.setVolume(settings.sfxVolume);
+            SFX.setMuted(settings.sfxMuted);
+            SFX.setTickTimbre(settings.sfxTickTimbre);
             AppStorage.saveSettings(settings);
             const hp = document.getElementById('help-panel');
             if (hp) { if (settings.showHelp) hp.classList.add('visible'); else hp.classList.remove('visible'); }

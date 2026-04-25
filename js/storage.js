@@ -50,6 +50,9 @@ const AppStorage = (() => {
         textStrokeEnabled: true,
         textStrokeColor: '#000000',
         textStrokeWidth: 2,
+        sfxVolume: 0.5,
+        sfxMuted: false,
+        sfxTickTimbre: 'crisp',
     };
 
     const DECELERATION_MAP = {

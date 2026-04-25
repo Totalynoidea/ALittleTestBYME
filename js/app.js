@@ -21,7 +21,7 @@
     const presetBtn = document.getElementById('preset-btn');
 
     function init() {
-        AppTheme.init(); WheelRenderer.init(canvas);
+        AppTheme.init(); WheelRenderer.init(canvas); SFX.loadFromSettings();
         loadSelection(); bindEvents(); render();
     }
 
@@ -81,7 +81,7 @@
 
     function updateBtn() {
         if (SpinEngine.isResult()) { spinBtn.textContent = '🎡 再转一次'; spinBtn.disabled = false; spinBtn.onclick = () => { resultIndex = -1; doSpin(); }; }
-        else if (SpinEngine.isSpinning()) { spinBtn.textContent = '⏹ 立刻停止'; spinBtn.disabled = false; spinBtn.onclick = () => SpinEngine.quickStop(); }
+        else if (SpinEngine.isSpinning()) { spinBtn.textContent = '⏹ 立刻停止'; spinBtn.disabled = false; spinBtn.onclick = () => { SFX.playQuickStop(); SpinEngine.quickStop(); }; }
         else { spinBtn.textContent = '🎰 开始旋转'; spinBtn.disabled = !currentWheel; spinBtn.onclick = () => doSpin(); }
     }
 
@@ -100,6 +100,12 @@
     function tick() {
         render();
         if (SpinEngine.isSpinning() || SpinEngine.isDragging()) {
+            // 拖拽时：tick 音效
+            if (SpinEngine.isDragging()) {
+                const angle = SpinEngine.getAngle();
+                const segs = WheelRenderer.getSegments();
+                SFX.checkTick(angle, segs, 0.4);
+            }
             requestAnimationFrame(tick);
         } else renderLoopActive = false;
     }
@@ -111,14 +117,20 @@
     function bindEvents() {
         spinBtn.onclick = () => doSpin();
 
-        SpinEngine.onTick = () => {};
+        SpinEngine.onTick = (angle, state) => {
+            // 自动旋转时触发 tick 音效
+            if (state === 'spinning' || state === 'stopping') {
+                const segs = WheelRenderer.getSegments();
+                SFX.checkTick(angle, segs, 1.0);
+            }
+        };
         SpinEngine.onStateChange = (ns) => {
             updateBtn();
-            if (ns === SpinEngine.STATE.SPINNING) startLoop(); // 确保旋转时渲染循环在跑
-            if (ns === SpinEngine.STATE.DRAGGING) { resultIndex = -1; resultText = ''; startLoop(); } // 拖拽时恢复颜色
+            if (ns === SpinEngine.STATE.SPINNING) { startLoop(); SFX.playSpinStart(); }
+            if (ns === SpinEngine.STATE.DRAGGING) { resultIndex = -1; resultText = ''; SFX.resetTickState(); startLoop(); }
         };
-        SpinEngine.onResult = (a) => handleResult(a);
-        SpinEngine.onSpinStart = () => { resultIndex = -1; resultText = ''; }; // 旋转开始时清除高亮
+        SpinEngine.onResult = (a) => { handleResult(a); };
+        SpinEngine.onSpinStart = () => { resultIndex = -1; resultText = ''; SFX.resetTickState(); }; // 旋转开始时清除高亮
         SpinEngine.onCenterLongPress = () => { SpinEngine.skipToResult(WheelRenderer.getSegments().filter(s => !s.disabled)); startLoop(); };
 
         // Canvas down
@@ -190,6 +202,7 @@
             mouseDownPos = null;
             const s = AppStorage.loadSettings();
             if (s.clickToStop) {
+                SFX.playQuickStop();
                 SpinEngine.quickStop();
                 startLoop();
             }
@@ -235,7 +248,7 @@
         if (!settings.allowRepeat && seg.optionId && currentWheel.drawnOptions?.includes(seg.optionId)) {
             SpinEngine.snapToValid(enabledSegs, currentWheel.drawnOptions || []);
             startLoop();
-            return;
+            return; // snapToValid 完成后会再次触发 onResult，那时才播放音效
         }
 
         // 落在禁用区域（理论上不应该，但安全兜底）
@@ -261,6 +274,7 @@
         updateTarget(SpinEngine.getAngle(), sm);
         updateBtn();
         WheelRenderer.draw(currentWheel, SpinEngine.getAngle(), { theme: settings.theme, spinMode: sm, resultIndex, drawnOptions: currentWheel.drawnOptions || [], textColor: settings.textColor, textStrokeEnabled: settings.textStrokeEnabled, textStrokeColor: settings.textStrokeColor, textStrokeWidth: settings.textStrokeWidth });
+        SFX.playResult();
         if (!settings.allowRepeat) { const a = currentWheel.options.filter(o => o.enabled && !currentWheel.drawnOptions?.includes(o.id)); if (!a.length) setTimeout(() => UI.toast('🎉 全部抽完！', 'info'), 500); }
     }
 

@@ -138,6 +138,25 @@
             <label>显示使用说明</label>
             <label class="toggle-switch"><input type="checkbox" id="set-show-help" checked><span class="toggle-slider"></span></label>
         </div>
+        <div class="setting-group">
+            <label>🔊 音效</label>
+            <div class="setting-inline">
+                <label class="toggle-switch"><input type="checkbox" id="set-sfx-muted"><span class="toggle-slider"></span></label>
+                <span style="font-size:12px;color:var(--text-muted)">静音</span>
+            </div>
+            <div class="setting-inline" style="margin-top:4px">
+                <span style="font-size:12px;color:var(--text-muted)">🔊</span>
+                <input type="range" id="set-sfx-volume" min="0" max="1" step="0.05" value="0.5" style="flex:1;accent-color:var(--accent)">
+                <span class="range-val" id="sfx-volume-val">50%</span>
+            </div>
+        </div>
+        <div class="setting-group">
+            <label>Tick 音色</label>
+            <select id="set-sfx-tick-timbre"></select>
+            <div class="setting-inline" style="margin-top:2px">
+                <button class="btn btn-secondary btn-sm" id="sfx-preview-tick" style="font-size:12px;padding:3px 10px">试听</button>
+            </div>
+        </div>
     </div>
     <div class="settings-footer">
         <button class="btn btn-secondary" id="settings-reset">恢复默认</button>
@@ -158,6 +177,7 @@
 <script src="js/theme.js"></script>
 <script src="js/spin-engine.js"></script>
 <script src="js/wheel-renderer.js"></script>
+<script src="js/sfx.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/app.js"></script>
 </body>
