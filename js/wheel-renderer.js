@@ -163,44 +163,133 @@ const WheelRenderer = (() => {
         const baseFontSize = Math.max(11, Math.min(18, R * 0.07));
         const fontSize = baseFontSize;
 
+        // ── 计算扇形弧宽（在文字位置处的可用宽度） ──
+        // 获取当前 segment 的弧度
+        const seg = cachedSegments.find(s => {
+            const mid = (s.startAngle + s.endAngle) / 2;
+            // 归一化比较
+            const mNorm = ((midCanvasAngle + Math.PI / 2) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+            const sNorm = (s.startAngle % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+            const eNorm = (s.endAngle % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+            return mNorm >= sNorm && mNorm < eNorm;
+        });
+        const segArc = seg ? (seg.endAngle - seg.startAngle) : Math.PI / 4;
+
+        // 文字基准位置距圆心的比例
+        const textXBase = R * 0.55;
+        const textXEdge = R * 0.88;
+        const arcAtTextPos = textXBase; // 文字位置半径
+        const arcWidth = segArc * arcAtTextPos; // 弧宽 = 弧度 × 半径
+
+        // 是否允许换行：弧宽 > 2.5 倍字体大小
+        const canWrap = arcWidth > fontSize * 2.5;
+
+        // 文字最大可用宽度（单行，不超出扇形边界）
+        const maxSingleLineWidth = Math.min(R * 0.48, arcWidth * 0.85);
+
+        // ── 处理手动换行（\n） ──
+        const rawLines = text.split('\n');
+
+        // ── 自动换行逻辑 ──
         ctx.save();
+        ctx.font = `bold ${fontSize}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+
+        let lines = [];
+        if (rawLines.length === 1 && !canWrap) {
+            // 单行，不允许换行
+            let line = rawLines[0];
+            while (ctx.measureText(line + '…').width > maxSingleLineWidth && line.length > 1) line = line.slice(0, -1);
+            if (line !== rawLines[0]) line += '…';
+            lines = [line];
+        } else if (rawLines.length === 1 && canWrap) {
+            // 单段文字，允许自动换行（最多2行）
+            const wrapWidth = Math.min(maxSingleLineWidth, arcWidth * 0.8);
+            let line1 = '';
+            for (let i = 0; i < rawLines[0].length; i++) {
+                const test = line1 + rawLines[0][i];
+                if (ctx.measureText(test).width > wrapWidth && line1.length > 0) {
+                    lines.push(line1);
+                    line1 = rawLines[0][i];
+                    if (lines.length >= 1) {
+                        // 剩余文字作为第二行
+                        const rest = rawLines[0].slice(i);
+                        // 第二行截断
+                        while (ctx.measureText(rest + '…').width > wrapWidth && rest.length > 1) rest = rest.slice(0, -1);
+                        if (rest !== rawLines[0].slice(i)) rest += '…';
+                        lines.push(rest);
+                        break;
+                    }
+                } else {
+                    line1 = test;
+                }
+            }
+            if (lines.length < 2) lines.push(line1);
+        } else {
+            // 有手动换行：最多渲染前2行
+            for (let i = 0; i < Math.min(rawLines.length, 2); i++) {
+                let line = rawLines[i];
+                const lineMaxW = (rawLines.length <= 2 || !canWrap) ? maxSingleLineWidth : Math.min(maxSingleLineWidth, arcWidth * 0.8);
+                while (ctx.measureText(line + '…').width > lineMaxW && line.length > 1) line = line.slice(0, -1);
+                if (line !== rawLines[i]) line += '…';
+                lines.push(line);
+            }
+        }
+
+        // 限制最多2行
+        lines = lines.slice(0, 2);
+
+        // ── 计算文字位置 ──
+        // 文字较多时，向中心移动
+        const totalTextLen = lines.join('').length;
+        const longTextThreshold = 8; // 超过此字符数开始向中心移动
+        let textX;
+        if (totalTextLen > longTextThreshold) {
+            const shift = Math.min(R * 0.15, (totalTextLen - longTextThreshold) * R * 0.015);
+            textX = textXBase - shift;
+        } else {
+            textX = textXBase;
+        }
+
+        // 不翻转：始终从中心向边缘阅读
         ctx.translate(cx, cy);
         ctx.rotate(midCanvasAngle);
 
-        // 不翻转：始终从中心向边缘阅读
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.font = `bold ${fontSize}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
 
-        const maxW = R * 0.48;
-        let display = text;
-        while (ctx.measureText(display).width > maxW && display.length > 1) display = display.slice(0, -1);
-        if (display !== text) display += '…';
+        // ── 绘制文字 ──
+        const lineHeight = fontSize * 1.25;
+        const totalHeight = lines.length * lineHeight;
+        const startY = -(totalHeight - lineHeight) / 2; // 垂直居中
 
-        const textX = R * 0.55;
-
-        // 描边
+        // 描边设置
         const strokeOn = settings.textStrokeEnabled !== false;
-        if (strokeOn) {
-            ctx.strokeStyle = settings.textStrokeColor || '#000000';
-            ctx.lineWidth = Math.max(0.5, Math.min(5, settings.textStrokeWidth || 2));
-            ctx.lineJoin = 'round';
-            ctx.strokeText(display, textX, 0);
-        }
+        const strokeColor = settings.textStrokeColor || '#000000';
+        const strokeWidth = Math.max(0.5, Math.min(5, settings.textStrokeWidth || 2));
 
-        // 文字
-        ctx.fillStyle = textColor;
-        ctx.fillText(display, textX, 0);
+        lines.forEach((line, idx) => {
+            const y = startY + idx * lineHeight;
+
+            if (strokeOn) {
+                ctx.strokeStyle = strokeColor;
+                ctx.lineWidth = strokeWidth;
+                ctx.lineJoin = 'round';
+                ctx.strokeText(line, textX, y);
+            }
+
+            ctx.fillStyle = textColor;
+            ctx.fillText(line, textX, y);
+        });
 
         // 禁用/已抽取：删除线
         if (isDisabled || isDrawn) {
-            const tw = ctx.measureText(display).width;
+            const tw = Math.max(...lines.map(l => ctx.measureText(l).width));
             ctx.beginPath();
             ctx.strokeStyle = textColor;
             ctx.lineWidth = 1.5;
             ctx.lineCap = 'round';
-            ctx.moveTo(textX, -fontSize * 0.15);
-            ctx.lineTo(textX + tw, -fontSize * 0.15);
+            ctx.moveTo(textX, startY);
+            ctx.lineTo(textX + tw, startY);
             ctx.stroke();
         }
 
