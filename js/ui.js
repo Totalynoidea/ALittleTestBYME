@@ -34,6 +34,7 @@ const UI = (() => {
         panel.querySelector('#set-stroke-width').value = settings.textStrokeWidth || 2;
         panel.querySelector('#stroke-width-val').textContent = settings.textStrokeWidth || 2;
         panel.querySelector('#set-show-help').checked = settings.showHelp !== false;
+        panel.querySelector('#set-auto-close-on-create').checked = settings.autoCloseOnCreateWheel || false;
         panel.querySelector('#set-sfx-muted').checked = settings.sfxMuted || false;
         panel.querySelector('#set-sfx-volume').value = settings.sfxVolume !== undefined ? settings.sfxVolume : 0.5;
         panel.querySelector('#sfx-volume-val').textContent = Math.round((settings.sfxVolume !== undefined ? settings.sfxVolume : 0.5) * 100) + '%';
@@ -91,9 +92,9 @@ const UI = (() => {
             toast(`已切换到${nt === 'dark' ? '深色' : '浅色'}模式`);
         };
 
-        // 重置
+        // 重置为初始设置（仅重置设置项，保留转盘数据）
         panel.querySelector('#settings-reset').onclick = () => {
-            if (confirm('确定重置所有设置？')) { const f = AppStorage.resetSettings(); AppTheme.set(f.theme); closeSettings(); if (onChange) onChange(f); toast('设置已重置', 'success'); }
+            if (confirm('确定将所有设置恢复为初始值？\n\n已保存的转盘、预设和抽取记录不会受影响。')) { const f = AppStorage.resetSettings(); AppTheme.set(f.theme); closeSettings(); if (onChange) onChange(f); toast('设置已恢复为初始值', 'success'); }
         };
 
         // 实时自动保存：每次修改立即保存
@@ -110,6 +111,7 @@ const UI = (() => {
             settings.textStrokeWidth = parseFloat(panel.querySelector('#set-stroke-width').value) || 2;
             settings.colorScheme = schemeSel.value;
             settings.showHelp = panel.querySelector('#set-show-help').checked;
+            settings.autoCloseOnCreateWheel = panel.querySelector('#set-auto-close-on-create').checked;
             settings.sfxMuted = panel.querySelector('#set-sfx-muted').checked;
             settings.sfxVolume = parseFloat(panel.querySelector('#set-sfx-volume').value) || 0;
             settings.sfxTickTimbre = panel.querySelector('#set-sfx-tick-timbre').value;
@@ -149,7 +151,7 @@ const UI = (() => {
     /* ══════════════════════════════════════════
        转盘编辑器
     ══════════════════════════════════════════ */
-    function openWheelEditor(wheel, onSave, onDelete) {
+    function openWheelEditor(wheel, onSave, onDelete, onClose) {
         const modal = document.getElementById('modal-overlay');
         document.getElementById('modal-title').textContent = '编辑转盘 — ' + (wheel.name || '新转盘');
         const body = document.getElementById('modal-body');
@@ -232,14 +234,14 @@ const UI = (() => {
         });
 
         footer.innerHTML = `<button class="btn btn-danger btn-sm" id="modal-delete" style="margin-right:auto">🗑️ 删除转盘</button><button class="btn btn-secondary" id="modal-cancel">取消</button><button class="btn btn-primary" id="modal-confirm">保存</button>`;
-        footer.querySelector('#modal-cancel').onclick = closeEditor;
+        footer.querySelector('#modal-cancel').onclick = () => { closeEditor(); if (onClose) onClose(); };
         footer.querySelector('#modal-confirm').onclick = () => {
             wheel.name = body.querySelector('#editor-name').value.trim() || wheel.name;
-            onSave(wheel); closeEditor(); toast('转盘已更新', 'success');
+            onSave(wheel); closeEditor(); if (onClose) onClose(); toast('转盘已更新', 'success');
         };
         if (onDelete) {
             footer.querySelector('#modal-delete').onclick = () => {
-                if (confirm('确定删除该转盘？此操作不可撤销。')) { onDelete(); closeEditor(); toast('转盘已删除', 'success'); }
+                if (confirm('确定删除该转盘？此操作不可撤销。')) { onDelete(); closeEditor(); if (onClose) onClose(); toast('转盘已删除', 'success'); }
             };
         } else {
             footer.querySelector('#modal-delete').style.display = 'none';
@@ -346,12 +348,27 @@ const UI = (() => {
                     openWheelEditor(AppStorage.deepClone(wheel), w => {
                         AppStorage.updateWheel(gid, wid, w);
                         groups = AppStorage.loadGroups();
-                        // 如果编辑的是当前转盘，刷新
                         if (gid === currentGroupId && wid === currentWheelId) {
                             onSelect(gid, wid);
                         }
-                        closePresetManager();
-                        toast('转盘已更新', 'success');
+                    }, () => {
+                        // 删除转盘后回到预设管理
+                        const gs2 = AppStorage.loadGroups();
+                        const group = gs2.find(g => g.id === gid);
+                        if (!group || group.wheels.length <= 1) { UI.toast('该组至少保留一个转盘', 'warn'); return; }
+                        AppStorage.deleteWheel(gid, wid);
+                        groups = AppStorage.loadGroups();
+                        let newWid = currentWheelId;
+                        if (gid === currentGroupId && wid === currentWheelId) {
+                            const updatedGroup = groups.find(g => g.id === gid);
+                            newWid = updatedGroup?.wheels[0]?.id;
+                            if (newWid) { currentWheelId = newWid; onSelect(gid, newWid); }
+                        }
+                        toast('转盘已删除', 'success');
+                    }, () => {
+                        // 关闭编辑器后回到预设管理界面
+                        groups = AppStorage.loadGroups();
+                        openPresetManager(groups, currentGroupId, currentWheelId, onSelect);
                     });
                 });
             });
@@ -379,7 +396,21 @@ const UI = (() => {
             });
             // 新建转盘
             body.querySelectorAll('.preset-add-wheel').forEach(btn => {
-                btn.addEventListener('click', () => { const w = AppStorage.addWheel(btn.dataset.gid); if (w) { groups = AppStorage.loadGroups(); closePresetManager(); onSelect(btn.dataset.gid, w.id); toast('已添加', 'success'); } });
+                btn.addEventListener('click', () => {
+                    const w = AppStorage.addWheel(btn.dataset.gid);
+                    if (w) {
+                        groups = AppStorage.loadGroups();
+                        const shouldClose = AppStorage.loadSettings().autoCloseOnCreateWheel;
+                        if (shouldClose) {
+                            closePresetManager();
+                            onSelect(btn.dataset.gid, w.id);
+                        } else {
+                            onSelect(btn.dataset.gid, w.id);
+                            render();
+                        }
+                        toast('已添加', 'success');
+                    }
+                });
             });
         }
         render();
@@ -396,8 +427,14 @@ const UI = (() => {
                 const w = AppStorage.addWheel(g.id);
                 if (!w) { toast('创建默认转盘失败', 'error'); return; }
                 groups = AppStorage.loadGroups();
-                closePresetManager();
-                onSelect(g.id, w.id);
+                const shouldClose = AppStorage.loadSettings().autoCloseOnCreateWheel;
+                if (shouldClose) {
+                    closePresetManager();
+                    onSelect(g.id, w.id);
+                } else {
+                    onSelect(g.id, w.id);
+                    render();
+                }
                 toast('转盘组已创建', 'success');
             }
         });

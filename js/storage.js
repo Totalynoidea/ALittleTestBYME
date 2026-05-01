@@ -53,6 +53,7 @@ const AppStorage = (() => {
         sfxVolume: 0.5,
         sfxMuted: false,
         sfxTickTimbre: 'crisp',
+        autoCloseOnCreateWheel: false,
     };
 
     const DECELERATION_MAP = {
