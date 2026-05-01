@@ -104,7 +104,7 @@ const WheelRenderer = (() => {
 
         // 各分区
         for (let i = 0; i < n; i++) {
-            drawSegment(segments[i], i, n, segRotation, theme, wheel.colorSchemeId, resultIndex, drawnOptions);
+            drawSegment(segments[i], i, n, segRotation, theme, wheel.colorSchemeId, resultIndex, drawnOptions, segments[i]);
         }
 
         // 中心圆
@@ -114,7 +114,7 @@ const WheelRenderer = (() => {
         drawPointer(rotation, spinMode, theme);
     }
 
-    function drawSegment(seg, index, total, rotation, theme, schemeId, resultIndex, drawnOptions) {
+    function drawSegment(seg, index, total, rotation, theme, schemeId, resultIndex, drawnOptions, segmentForText) {
         const cs = rotation - Math.PI / 2;
         const cStart = seg.startAngle + cs, cEnd = seg.endAngle + cs;
         const midA = (seg.startAngle + seg.endAngle) / 2 + cs;
@@ -148,8 +148,8 @@ const WheelRenderer = (() => {
         }
         ctx.restore();
 
-        // 文字（不翻转，始终从中心向边缘）
-        drawText(seg.text, midA, isResult, isDrawn, isDisabled, theme);
+        // 文字（不翻转，始终从中心向边缘）—— 直接传入 segment，避免旋转依赖的查找
+        drawText(seg.text, midA, isResult, isDrawn, isDisabled, theme, segmentForText);
     }
 
     /* ── 文本截断（二分查找，O(log n) 次测量） ── */
@@ -169,7 +169,7 @@ const WheelRenderer = (() => {
         return (truncated === text) ? text : truncated + suffix;
     }
 
-    function drawText(text, midCanvasAngle, isResult, isDrawn, isDisabled, theme) {
+    function drawText(text, midCanvasAngle, isResult, isDrawn, isDisabled, theme, segment) {
         // 防御性检查：确保 text 是有效字符串
         if (typeof text !== 'string') text = String(text || '');
 
@@ -183,15 +183,8 @@ const WheelRenderer = (() => {
         const baseFontSize = Math.max(11, Math.min(18, R * 0.07));
         const fontSize = baseFontSize;
 
-        // ── 计算扇形弧宽（在文字位置处的可用宽度） ──
-        const seg = cachedSegments.find(s => {
-            const mid = (s.startAngle + s.endAngle) / 2;
-            const mNorm = ((midCanvasAngle + Math.PI / 2) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-            const sNorm = (s.startAngle % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-            const eNorm = (s.endAngle % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-            return mNorm >= sNorm && mNorm < eNorm;
-        });
-        const segArc = seg ? (seg.endAngle - seg.startAngle) : Math.PI / 4;
+        // ── 计算扇形弧宽（直接使用传入的 segment，不依赖旋转角度查找） ──
+        const segArc = segment ? (segment.endAngle - segment.startAngle) : Math.PI / 4;
 
         const textXBase = R * 0.55;
         const arcAtTextPos = textXBase;

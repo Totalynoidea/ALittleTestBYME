@@ -174,7 +174,9 @@ const UI = (() => {
                     <label class="toggle-switch"><input type="checkbox" ${opt.enabled ? 'checked' : ''} data-i="${i}" data-f="enabled" /><span class="toggle-slider"></span></label>
                     <input type="text" value="${esc(opt.text)}" placeholder="选项名称" data-i="${i}" data-f="text" class="editor-opt-text" />
                     <div class="weight-control"><span class="weight-label">权重</span>
+                        <button class="btn btn-icon btn-sm weight-btn" data-i="${i}" data-dir="-1" title="减少权重">−</button>
                         <input type="number" min="1" max="100" value="${w}" data-i="${i}" data-f="weight" class="editor-opt-weight" />
+                        <button class="btn btn-icon btn-sm weight-btn" data-i="${i}" data-dir="1" title="增加权重">+</button>
                     </div>
                     <input type="color" value="${opt.customColor || '#ffffff'}" data-i="${i}" data-f="customColor" class="editor-opt-color" title="自定义颜色" />
                     <button class="btn btn-icon btn-danger-icon" data-i="${i}" data-act="del" title="删除">✕</button>
@@ -190,6 +192,10 @@ const UI = (() => {
                     else if (f === 'customColor') wheel.options[idx].customColor = e.target.value;
                 });
                 inp.addEventListener('input', e => { if (e.target.dataset.f === 'weight') wheel.options[+e.target.dataset.i].weight = clampWeight(+e.target.value); });
+                // 移动端兼容：color picker 可能只触发 input 不触发 change
+                if (inp.dataset.f === 'customColor') {
+                    inp.addEventListener('input', e => { wheel.options[+e.target.dataset.i].customColor = e.target.value; });
+                }
                 // 滚轮调整权重
                 if (inp.dataset.f === 'weight') {
                     inp.addEventListener('wheel', e => {
@@ -199,6 +205,17 @@ const UI = (() => {
                         wheel.options[+inp.dataset.i].weight = +inp.value;
                     });
                 }
+            });
+            // 权重 +/- 按钮（移动端友好）
+            list.querySelectorAll('.weight-btn').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    const idx = +btn.dataset.i, dir = +btn.dataset.dir;
+                    const cur = wheel.options[idx].weight || 1;
+                    const newVal = clampWeight(cur + dir);
+                    wheel.options[idx].weight = newVal;
+                    const weightInput = list.querySelector(`input[data-i="${idx}"][data-f="weight"]`);
+                    if (weightInput) weightInput.value = newVal;
+                });
             });
             list.querySelectorAll('[data-act="del"]').forEach(btn => {
                 btn.addEventListener('click', e => {

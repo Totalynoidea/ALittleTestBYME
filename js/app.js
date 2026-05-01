@@ -142,8 +142,30 @@
         // 文档级 move/up（拖拽不丢失）
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onUp);
-        document.addEventListener('touchmove', e => { if (SpinEngine.isDragActive()) { e.preventDefault(); onMove(e.touches[0]); } }, { passive: false });
-        document.addEventListener('touchend', e => { if (SpinEngine.isDragActive()) { e.preventDefault(); onUp(); } }, { passive: false });
+        document.addEventListener('touchmove', e => {
+            if (SpinEngine.isDragActive()) {
+                e.preventDefault();
+                onMove(e.touches[0]);
+            }
+            // 触摸移动时检测中心圆悬停
+            if (e.touches[0]) {
+                const c = toCanvas(e.touches[0]);
+                WheelRenderer.setCenterHover(WheelRenderer.hitTestCenter(c.x, c.y));
+                canvas.style.cursor = WheelRenderer.hitTestCenter(c.x, c.y) ? 'pointer' : 'default';
+            }
+        }, { passive: false });
+        document.addEventListener('touchend', e => {
+            if (SpinEngine.isDragActive()) { e.preventDefault(); onUp(); }
+        }, { passive: false });
+        // 触摸取消时也清理状态
+        document.addEventListener('touchcancel', e => {
+            if (SpinEngine.isDragActive()) {
+                WheelRenderer.setCenterHover(false);
+                WheelRenderer.setCenterPressed(false);
+                SpinEngine.onDragEnd();
+                renderLoopActive = false;
+            }
+        }, { passive: false });
 
         canvas.addEventListener('mouseleave', () => { WheelRenderer.setCenterHover(false); canvas.style.cursor = 'default'; });
 
@@ -183,7 +205,10 @@
         const c = toCanvas(e), g = WheelRenderer.getGeometry();
         mouseDownPos = c; didDrag = false;
         wasSpinningBeforeClick = SpinEngine.isSpinning();
-        SpinEngine.onDragStart(c.x, c.y, g.centerX, g.centerY, WheelRenderer.hitTestCenter(c.x, c.y));
+        // 触摸按下时的中心圆视觉反馈
+        const onCenter = WheelRenderer.hitTestCenter(c.x, c.y);
+        if (onCenter) WheelRenderer.setCenterPressed(true);
+        SpinEngine.onDragStart(c.x, c.y, g.centerX, g.centerY, onCenter);
         startLoop();
     }
 
