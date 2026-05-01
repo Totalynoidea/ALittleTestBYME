@@ -185,37 +185,53 @@ const WheelRenderer = (() => {
 
         // ── 计算扇形几何 ──
         const segArc = segment ? (segment.endAngle - segment.startAngle) : Math.PI / 4;
-        const textXBase = R * 0.55;
+        const textXBase = R * 0.40; // 靠近中心，留出更多径向空间展示文字
 
-        // 文字最大可用宽度：以径向空间为主（文字沿径向书写，弧宽不影响行宽）
+        // 文字最大可用宽度：以径向空间为主
         const radialSpace = R - textXBase;
         const maxLineWidth = Math.max(10, radialSpace * 0.95);
+
+        // 弧宽：用于判断扇区是否有足够空间换行（需能容纳两行文字高度）
+        const arcWidth = Math.max(10, segArc * textXBase);
+        const canWrap = arcWidth > fontSize * 3;
 
         // ── 处理手动换行 ──
         const rawLines = text.split('\n').filter(l => true);
 
-        // ── 文字布局：不自动换行，始终单行显示，过长才截断 ──
+        // ── 文字布局 ──
         ctx.save();
         try {
             ctx.font = `bold ${fontSize}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
 
             let lines = [];
-            if (rawLines.length === 1) {
-                const tw = ctx.measureText(rawLines[0]).width;
+            if (rawLines.length === 1 && canWrap) {
+                // 大扇区：尝试换行，但能放下就不换
+                const text0 = rawLines[0];
+                const tw = ctx.measureText(text0).width;
                 if (tw <= maxLineWidth) {
-                    lines = [rawLines[0]];
+                    lines = [text0];
                 } else {
-                    lines = [truncateToWidth(rawLines[0], maxLineWidth, true)];
+                    // 尽量多放第一行
+                    let lo = 0, hi = text0.length;
+                    while (lo < hi) {
+                        const mid = Math.ceil((lo + hi) / 2);
+                        if (ctx.measureText(text0.slice(0, mid)).width <= maxLineWidth) lo = mid;
+                        else hi = mid - 1;
+                    }
+                    lines.push(text0.slice(0, lo));
+                    if (lo < text0.length) {
+                        lines.push(truncateToWidth(text0.slice(lo), maxLineWidth, true));
+                    }
                 }
+            } else if (rawLines.length === 1) {
+                // 小扇区：单行截断，径向空间保证至少一行完整
+                const tw = ctx.measureText(rawLines[0]).width;
+                lines = [tw <= maxLineWidth ? rawLines[0] : truncateToWidth(rawLines[0], maxLineWidth, true)];
             } else {
+                // 手动换行：最多 2 行
                 for (let i = 0; i < Math.min(rawLines.length, 2); i++) {
                     let line = String(rawLines[i] || '');
-                    const lw = ctx.measureText(line).width;
-                    if (lw <= maxLineWidth) {
-                        lines.push(line);
-                    } else {
-                        lines.push(truncateToWidth(line, maxLineWidth, line.length > 0));
-                    }
+                    lines.push(truncateToWidth(line, maxLineWidth, line.length > 0));
                 }
             }
 

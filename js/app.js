@@ -267,7 +267,13 @@
 
         const settings = AppStorage.loadSettings();
         const idx = SpinEngine.getResultIndex(enabledSegs);
-        if (idx < 0) { resultIndex = -1; return; }
+        if (idx < 0) {
+            // 指针落在禁用区域，自动跳到最近的有效区域
+            const drawnIds = settings.allowRepeat ? [] : (currentWheel.drawnOptions || []);
+            SpinEngine.snapToValid(enabledSegs, drawnIds);
+            startLoop();
+            return;
+        }
 
         const seg = enabledSegs[idx];
 
