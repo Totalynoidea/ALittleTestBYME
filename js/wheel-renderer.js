@@ -183,35 +183,39 @@ const WheelRenderer = (() => {
         const baseFontSize = Math.max(11, Math.min(18, R * 0.07));
         const fontSize = baseFontSize;
 
-        // ── 计算扇形弧宽（直接使用传入的 segment，不依赖旋转角度查找） ──
+        // ── 计算扇形几何 ──
         const segArc = segment ? (segment.endAngle - segment.startAngle) : Math.PI / 4;
-
         const textXBase = R * 0.55;
-        const arcAtTextPos = textXBase;
-        const arcWidth = Math.max(10, segArc * arcAtTextPos);
 
-        // 单行最大宽度：弧宽和径向可用空间取较小值，充分利用空间
-        const maxSingleLineWidth = Math.max(10, Math.min(R - textXBase, arcWidth * 0.95));
+        // 文字最大可用宽度：以径向空间为主（文字沿径向书写，弧宽不影响行宽）
+        const radialSpace = R - textXBase;
+        const maxLineWidth = Math.max(10, radialSpace * 0.95);
 
         // ── 处理手动换行 ──
-        const rawLines = text.split('\n').filter(l => true); // 确保数组
+        const rawLines = text.split('\n').filter(l => true);
 
-        // ── 文字布局逻辑 ──
-        // 自动换行在扇形区域效果差，仅对用户手动换行的文本做多行显示
-        // 单行文本始终单行截断，保证至少完整展示第一行
+        // ── 文字布局：不自动换行，始终单行显示，过长才截断 ──
         ctx.save();
         try {
             ctx.font = `bold ${fontSize}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
 
             let lines = [];
             if (rawLines.length === 1) {
-                // 单行文本：只做截断，不自动换行
-                lines = [truncateToWidth(rawLines[0], maxSingleLineWidth, true)];
+                const tw = ctx.measureText(rawLines[0]).width;
+                if (tw <= maxLineWidth) {
+                    lines = [rawLines[0]];
+                } else {
+                    lines = [truncateToWidth(rawLines[0], maxLineWidth, true)];
+                }
             } else {
-                // 手动换行：最多显示 2 行，每行独立截断
                 for (let i = 0; i < Math.min(rawLines.length, 2); i++) {
                     let line = String(rawLines[i] || '');
-                    lines.push(truncateToWidth(line, maxSingleLineWidth, line.length > 0));
+                    const lw = ctx.measureText(line).width;
+                    if (lw <= maxLineWidth) {
+                        lines.push(line);
+                    } else {
+                        lines.push(truncateToWidth(line, maxLineWidth, line.length > 0));
+                    }
                 }
             }
 
